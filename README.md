@@ -56,3 +56,9 @@ $ tree -L 3
 0 directories, 15 files
 
 ```
+
+## Usage
+
+```bash
+cargo run <some-path>
+```
