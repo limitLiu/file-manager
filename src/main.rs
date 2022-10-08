@@ -1,12 +1,8 @@
-#![feature(path_file_prefix)]
-
-mod macos;
-use self::macos::{home_dir, home_dir_string};
 use clap::Parser;
 use regex::Regex;
-use std::collections::HashMap;
-use std::fs::{self, remove_dir, rename};
-use std::path::{Path, PathBuf};
+use std::fs::{read_dir, remove_file, rename, File};
+use std::io::{Read, Write};
+use std::path::Path;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -15,82 +11,50 @@ struct Args {
   input: String,
 }
 
-struct Context {
-  pub files: HashMap<PathBuf, Vec<PathBuf>>,
+const BUFFER_SIZE: usize = 1024;
+fn process_file(p: &Path) -> Result<(), anyhow::Error> {
+  let mut original_file = File::open(p)?;
+  let filename = p
+    .file_name()
+    .expect("Failed to get filename.")
+    .to_str()
+    .expect("Failed to unwrap path str.");
+
+  let mut buffer = [0u8; BUFFER_SIZE];
+  let file_regex = Regex::new(r"\.mp4$").expect("Failed to new file regex.");
+  if file_regex.is_match(filename) {
+    let mut count = original_file.read(&mut buffer)?;
+    if buffer[0] == 0xFF && buffer[1] == 0xFF && buffer[2] == 0xFF {
+      let new_filename = String::from("new_") + filename;
+      let new_filename = p.with_file_name(new_filename);
+      let new_file_path = Path::new(&new_filename);
+      let mut new_file = File::create(new_file_path)?;
+      let mut is_first = true;
+      while count != 0 {
+        if is_first {
+          new_file.write_all(&buffer[3..count])?;
+          is_first = false;
+        } else {
+          new_file.write_all(&buffer[..count])?;
+        }
+        count = original_file.read(&mut buffer)?;
+      }
+
+      remove_file(&p)?;
+      rename(new_file_path, p)?;
+    }
+  }
+
+  Ok(())
 }
 
-impl Context {
-  pub fn new() -> Self {
-    Self {
-      files: HashMap::new(),
-    }
-  }
-
-  pub fn collect_files(&mut self, dir: &Path) -> &mut Self {
-    let expect = "Failed to read file path.";
-    for sub_path in fs::read_dir(dir).expect(expect).flatten() {
-      let p = sub_path.path();
-      if p.is_file() {
-        if let Some(paths) = self.files.get_mut(dir) {
-          paths.push(p);
-        } else {
-          self.files.insert(dir.to_path_buf(), vec![p]);
-        }
-      } else {
-        self.collect_files(&p);
-      }
-    }
-    &mut *self
-  }
-
-  pub fn move_files(&mut self, root: &Path) -> &mut Self {
-    self.files.iter().for_each(|(parent, files)| {
-      let prefix = parent.to_str().expect("Failed to get dir name.");
-      let home = home_dir_string().unwrap();
-      let prefix_regex0 = Regex::new(home.as_str()).expect("Failed to new prefix_regex0.");
-      let prefix_regex1 = Regex::new(r"/").expect("Failed to new prefix_regex1.");
-      let prefix = prefix_regex0.replace_all(prefix, "").to_string();
-      let prefix = prefix_regex1.replace_all(&prefix, "_").into_owned();
-      for file in files {
-        let file_absolute_path = file.to_str().expect("Failed to get file path.");
-        let filename = file
-          // stable rust should use file_stem
-          .file_prefix()
-          .and_then(|f| f.to_str())
-          .expect("Failed to get file prefix name.");
-
-        let file_regex = Regex::new(r"^\.").expect("Failed to new file regex.");
-        if file_regex.is_match(filename) {
-          continue;
-        }
-
-        let file_ext = file
-          .extension()
-          .and_then(|f| f.to_str())
-          .expect("Failed to get file ext.");
-
-        let to =
-          root.to_str().unwrap().to_string() + "/" + filename + prefix.as_str() + "." + file_ext;
-        rename(file_absolute_path, to).unwrap();
-      }
-    });
-    self.files = HashMap::new();
-    &mut *self
-  }
-
-  pub fn remove_empty_dirs(&mut self, root: &Path) {
-    for dir_entry in root.read_dir().expect("Failed to get sub paths").flatten() {
-      let p = dir_entry.path();
-      if p.is_dir() {
-        self.remove_empty_dirs(&p);
-      }
-    }
-    if root
-      .read_dir()
-      .map(|mut i| i.next().is_none())
-      .unwrap_or(false)
-    {
-      remove_dir(root).unwrap();
+fn read_file(dir: &Path) {
+  for sub_path in read_dir(dir).expect("Failed to read file path.").flatten() {
+    let p = sub_path.path();
+    if p.is_file() {
+      process_file(&p).unwrap();
+    } else {
+      read_file(&p);
     }
   }
 }
@@ -101,11 +65,5 @@ fn main() {
   if !p.is_dir() {
     panic!("The input is not directory!");
   }
-
-  if home_dir().is_none() {
-    return;
-  }
-
-  let mut ctx = Context::new();
-  ctx.collect_files(p).move_files(p).remove_empty_dirs(p);
+  read_file(p);
 }
