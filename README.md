@@ -1,63 +1,29 @@
 # file manager
 
-A simple batch rename file command line.
+批量修改 Windows UWP 版 Bilibili 客户端下载的视频。
 
-#### files and directory structure like this
+#### 工作原理
 
-```text
-$ tree -L 3
-.
-├── 1
-│   ├── 80
-│   │   ├── audio.m4s
-│   │   ├── index.json
-│   │   └── video.m4s
-│   ├── danmaku.xml
-│   └── entry.json
-├── 2
-│   ├── 80
-│   │   ├── audio.m4s
-│   │   ├── index.json
-│   │   └── video.m4s
-│   ├── danmaku.xml
-│   └── entry.json
-└── 3
-    ├── 80
-    │   ├── audio.m4s
-    │   ├── index.json
-    │   └── video.m4s
-    ├── danmaku.xml
-    └── entry.json
+Windows UWP 版 B 站客户端下载下来的视频无法直接播放，所以写了个批量处理工具，
+移除文件起始 3 个 0xFF 字符，让普通播放器可以直接播放下载的视频。
 
-6 directories, 15 files
-```
-
-#### result like this
-
-```text
-$ tree -L 3
-.
-├── audio_Desktop_test-dir_1_80.m4s
-├── audio_Desktop_test-dir_2_80.m4s
-├── audio_Desktop_test-dir_3_80.m4s
-├── danmaku_Desktop_test-dir_1.xml
-├── danmaku_Desktop_test-dir_2.xml
-├── danmaku_Desktop_test-dir_3.xml
-├── entry_Desktop_test-dir_1.json
-├── entry_Desktop_test-dir_2.json
-├── entry_Desktop_test-dir_3.json
-├── index_Desktop_test-dir_1_80.json
-├── index_Desktop_test-dir_2_80.json
-├── index_Desktop_test-dir_3_80.json
-├── video_Desktop_test-dir_1_80.m4s
-├── video_Desktop_test-dir_2_80.m4s
-└── video_Desktop_test-dir_3_80.m4s
-
-0 directories, 15 files
-
-```
+目前使用笨办法实现，直接移除后再写入到新文件，再删除旧文件后重命名新文件到旧文件名，
+等有空优化下。
 
 ## Usage
+
+以下全部要在终端或者命令行工具内使用
+
+### Windows 上如何使用
+
+譬如在你的桌面，按住 Shift 键再对着桌面某个文件点鼠标右键可以复制路径，
+把复制到的结尾文件名去掉就是可以使用的路径。
+
+```bash
+cargo run "C:\Users\改成你当前电脑的用户文件夹\Desktop"
+```
+
+### Linux/macOS/WSL2 使用方法
 
 ```bash
 cargo run <some-path>
