@@ -1,8 +1,11 @@
 use clap::Parser;
+use indicatif::ProgressBar;
 use regex::Regex;
-use std::fs::{read_dir, remove_file, rename, File};
-use std::io::{Read, Write};
-use std::path::Path;
+use std::{
+  fs::{read_dir, remove_file, rename, File},
+  io::{Read, Write},
+  path::Path,
+};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -13,7 +16,6 @@ struct Args {
 
 const BUFFER_SIZE: usize = 1024;
 fn process_file(p: &Path) -> Result<(), anyhow::Error> {
-  let mut original_file = File::open(p)?;
   let filename = p
     .file_name()
     .expect("Failed to get filename.")
@@ -23,6 +25,9 @@ fn process_file(p: &Path) -> Result<(), anyhow::Error> {
   let mut buffer = [0u8; BUFFER_SIZE];
   let file_regex = Regex::new(r"\.mp4$").expect("Failed to new file regex.");
   if file_regex.is_match(filename) {
+    let mut original_file = File::open(p)?;
+    let file_size = original_file.metadata()?.len();
+    let pb = ProgressBar::new(file_size);
     let mut count = original_file.read(&mut buffer)?;
     if buffer[0] == 0xFF && buffer[1] == 0xFF && buffer[2] == 0xFF {
       let new_filename = String::from("new_") + filename;
@@ -33,15 +38,18 @@ fn process_file(p: &Path) -> Result<(), anyhow::Error> {
       while count != 0 {
         if is_first {
           new_file.write_all(&buffer[3..count])?;
+          pb.inc((count - 3) as u64);
           is_first = false;
         } else {
           new_file.write_all(&buffer[..count])?;
+          pb.inc(count as u64);
         }
         count = original_file.read(&mut buffer)?;
       }
 
-      remove_file(&p)?;
+      remove_file(p)?;
       rename(new_file_path, p)?;
+      pb.finish_with_message("done");
     }
   }
 
